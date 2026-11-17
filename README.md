@@ -93,3 +93,41 @@ Start with an issue and provide reproducible evidence for proposed changes. Do n
 ## License
 
 A source-code license has **not yet been chosen**. The project is publicly visible, but that does not by itself grant reuse rights. Model weights, datasets, and third-party dependencies may have separate terms.
+
+
+## Runnable ingestion MVP
+
+A runnable Docker Compose MVP is now included for the video-ingestion/training foundation:
+
+- React dashboard implementing the Upload / YouTube URL / Live Stream design.
+- FastAPI ingestion API and PostgreSQL durable job state.
+- Apache Kafka 4.4.0 KRaft event bus.
+- MinIO object storage for raw video, processed audio and live stream segments.
+- FFmpeg + yt-dlp worker for file, YouTube and RTMP/HLS ingestion.
+- JupyterHub research environment with the ASR/MT training libraries.
+- MLflow experiment tracking plus Redis for research/runtime coordination.
+- Smoke-test script and an environment-check notebook.
+
+The implemented ingestion path is:
+
+```text
+Source -> FastAPI -> PostgreSQL -> Kafka ingest topic
+       -> worker/FFmpeg -> MinIO -> Kafka chunk/job topics
+       -> JupyterHub / downstream ASR-MT experiments
+```
+
+Quick start:
+
+```bash
+cp .env.example .env
+# edit the development secrets first
+docker compose config
+docker compose up -d --build
+make smoke
+```
+
+Open the UI at `http://localhost:8080`, JupyterHub at `http://localhost:8001`, MLflow at `http://localhost:5000`, and MinIO Console at `http://localhost:9001`.
+
+See [docs/RUNBOOK.md](docs/RUNBOOK.md) for the full operating and security notes.
+
+> **Validation status:** Python source was syntax-checked and the Compose YAML was parsed during generation. Docker itself was not available in the generation environment, so image builds and runtime integration still need to be verified on a Docker host with `docker compose config`, `docker compose up --build`, and `make smoke`. Model training/inference quality is not yet validated.
