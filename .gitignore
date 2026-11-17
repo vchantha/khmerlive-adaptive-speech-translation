@@ -9,3 +9,6 @@ dist/
 .ipynb_checkpoints/
 training/workspace/*
 !training/workspace/.gitkeep
+
+# Local development TLS material (private keys must never be committed)
+infra/tls/generated/
