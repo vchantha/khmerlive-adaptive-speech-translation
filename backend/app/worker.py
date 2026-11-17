@@ -9,7 +9,7 @@ from confluent_kafka import Consumer
 
 from .config import get_settings
 from .db import SessionLocal, init_db
-from .events import publish
+from .events import client_config, publish
 from .models import IngestJob
 from .storage import ensure_bucket, get_file, put_file
 
@@ -35,7 +35,7 @@ def probe(path: Path) -> dict:
     return json.loads(p.stdout)
 
 def publish_chunk(job_id: str, sequence: int, object_name: str, kind: str, content_type: str):
-    publish(settings.kafka_chunk_topic, {"event_type":"media.chunk.ready","job_id":job_id,"sequence":sequence,"kind":kind,"bucket":settings.minio_bucket,"object_name":object_name,"content_type":content_type}, key=job_id)
+    publish(settings.kafka_chunk_topic, {"event_type":"media.chunk.ready","job_id":job_id,"sequence":sequence,"kind":kind,"bucket":settings.silo_bucket,"object_name":object_name,"content_type":content_type}, key=job_id)
 
 def chunk_audio(job_id: str, source: Path, workdir: Path) -> int:
     out_dir = workdir / "audio"; out_dir.mkdir(exist_ok=True)
@@ -126,7 +126,13 @@ def handle(event: dict):
 
 def main():
     init_db(); ensure_bucket()
-    consumer=Consumer({"bootstrap.servers":settings.kafka_bootstrap_servers,"group.id":settings.kafka_group_id,"auto.offset.reset":"earliest","enable.auto.commit":False})
+    consumer_config = client_config("khmerlive-ingestion-worker")
+    consumer_config.update({
+        "group.id": settings.kafka_group_id,
+        "auto.offset.reset": "earliest",
+        "enable.auto.commit": False,
+    })
+    consumer=Consumer(consumer_config)
     consumer.subscribe([settings.kafka_ingest_topic])
     try:
         while True:
