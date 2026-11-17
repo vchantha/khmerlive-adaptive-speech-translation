@@ -10,7 +10,7 @@
 5. **ASR adapter:** `transcribe(audio, language, model_version) -> segments, confidence_metadata`; model-specific confidence must be calibrated, not assumed comparable.
 6. **MT adapter:** `translate(text, source_lang, target_lang, model_version) -> text`; preserve named entities and domain terms via reviewed glossary.
 7. **PostgreSQL:** immutable-ish job metadata, status transitions, transcript and translation versions, reviewer decisions, consent/retention, model mapping and audit trail.
-8. **MinIO:** original/normalized audio, artifacts, versioned training datasets. Object URIs and checksums are indexed in PostgreSQL.
+8. **SILO:** original/normalized audio, artifacts, versioned training datasets. Object URIs and checksums are indexed in PostgreSQL.
 9. **Training/evaluation:** isolate GPU workloads; snapshot consented reviewed examples, run experiments, evaluate fixed held-out sets, human approve promotion.
 10. **Registry:** model metadata, artifact checksums, signed/approved version, canary and rollback pointers.
 
@@ -52,4 +52,4 @@ Authentication, authorization, data deletion and idempotency need explicit imple
 
 ## Operational path
 
-Start with a single Docker Compose environment. Later move stateless API/web/worker instances to Kubernetes; retain durable PostgreSQL and MinIO volumes/backups and dedicated GPU node scheduling. Define latency, RPO/RTO and concurrency targets from measured baselines rather than assumptions.
+Start with a single Docker Compose environment. Later move stateless API/web/worker instances to Kubernetes; retain durable PostgreSQL and SILO volumes/backups and dedicated GPU node scheduling. Define latency, RPO/RTO and concurrency targets from measured baselines rather than assumptions.
