@@ -1,6 +1,5 @@
 import os
 
-from jupyterhub.auth import SharedPasswordAuthenticator
 from jupyterhub.spawner import SimpleLocalProcessSpawner
 
 c = get_config()  # noqa: F821
@@ -8,17 +7,18 @@ c.JupyterHub.bind_url = "https://0.0.0.0:8000"
 c.JupyterHub.ssl_key = "/etc/jupyterhub/tls/tls.key"
 c.JupyterHub.ssl_cert = "/etc/jupyterhub/tls/tls.crt"
 c.JupyterHub.db_url = "sqlite:////srv/jupyterhub/jupyterhub.sqlite"
-c.JupyterHub.authenticator_class = SharedPasswordAuthenticator
+c.JupyterHub.authenticator_class = "shared-password"
 c.JupyterHub.spawner_class = SimpleLocalProcessSpawner
 c.JupyterHub.allow_named_servers = True
 
+c.Authenticator.allowed_users = {"researcher", "admin"}
+c.Authenticator.admin_users = {"admin"}
 c.SharedPasswordAuthenticator.user_password = os.environ.get(
     "JUPYTERHUB_PASSWORD", "change-me-jupyter"
 )
 c.SharedPasswordAuthenticator.admin_password = os.environ.get(
-    "JUPYTERHUB_ADMIN_PASSWORD", "change-me-admin"
+    "JUPYTERHUB_ADMIN_PASSWORD", "change-me-jupyter-admin-password-32chars"
 )
-c.Authenticator.admin_users = {"admin"}
 
 c.Spawner.cmd = ["jupyter-labhub"]
 c.Spawner.notebook_dir = "/workspace"
@@ -36,7 +36,6 @@ c.Spawner.environment = {
     "SILO_BUCKET": os.environ.get("SILO_BUCKET", "khmerlive"),
     "SILO_SECURE": os.environ.get("SILO_SECURE", "true"),
     "SILO_CA_FILE": os.environ.get("SILO_CA_FILE", "/etc/khmerlive/tls/ca.crt"),
-    # Compatibility for notebooks/libraries still using MinIO-style names.
     "MINIO_ENDPOINT": os.environ.get("SILO_ENDPOINT", "silo:9000"),
     "MINIO_ACCESS_KEY": os.environ.get("SILO_ACCESS_KEY", ""),
     "MINIO_SECRET_KEY": os.environ.get("SILO_SECRET_KEY", ""),
