@@ -1,0 +1,174 @@
+name: khmerlive
+
+x-app-env: &app-env
+  DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-khmerlive}:${POSTGRES_PASSWORD:-change-me-postgres}@postgres:5432/${POSTGRES_DB:-khmerlive}
+  KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:19092}
+  KAFKA_INGEST_TOPIC: ${KAFKA_INGEST_TOPIC:-khmerlive.ingest.requests}
+  KAFKA_CHUNK_TOPIC: ${KAFKA_CHUNK_TOPIC:-khmerlive.media.chunks}
+  KAFKA_JOB_TOPIC: ${KAFKA_JOB_TOPIC:-khmerlive.job.events}
+  KAFKA_GROUP_ID: ${KAFKA_GROUP_ID:-khmerlive-ingestion-worker}
+  MINIO_ENDPOINT: minio:9000
+  MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
+  MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-change-me-minio}
+  MINIO_SECURE: "false"
+  MINIO_BUCKET: ${MINIO_BUCKET:-khmerlive}
+  MAX_STREAM_SECONDS: ${MAX_STREAM_SECONDS:-3600}
+  AUDIO_CHUNK_SECONDS: ${AUDIO_CHUNK_SECONDS:-30}
+  STREAM_SEGMENT_SECONDS: ${STREAM_SEGMENT_SECONDS:-10}
+  CORS_ORIGINS: http://localhost:8080,http://127.0.0.1:8080
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-khmerlive}
+      POSTGRES_USER: ${POSTGRES_USER:-khmerlive}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me-postgres}
+    ports: ["5432:5432"]
+    volumes: [postgres-data:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-khmerlive} -d ${POSTGRES_DB:-khmerlive}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  redis:
+    image: redis:7.4-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    ports: ["6379:6379"]
+    volumes: [redis-data:/data]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  kafka:
+    image: apache/kafka:4.4.0
+    hostname: kafka
+    ports: ["9092:9092"]
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT_HOST://localhost:9092,PLAINTEXT://kafka:19092
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:29093
+      KAFKA_LISTENERS: CONTROLLER://:29093,PLAINTEXT_HOST://:9092,PLAINTEXT://:19092
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      CLUSTER_ID: 4L6g3nShT-eMCtK--X86sw
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_SHARE_COORDINATOR_STATE_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_SHARE_COORDINATOR_STATE_TOPIC_MIN_ISR: 1
+      KAFKA_LOG_DIRS: /tmp/kraft-combined-logs
+    volumes: [kafka-data:/tmp/kraft-combined-logs]
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 8s
+      retries: 20
+    restart: unless-stopped
+
+  kafka-init:
+    image: apache/kafka:4.4.0
+    depends_on:
+      kafka: {condition: service_healthy}
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - |
+        set -e
+        for topic in           "${KAFKA_INGEST_TOPIC:-khmerlive.ingest.requests}"           "${KAFKA_CHUNK_TOPIC:-khmerlive.media.chunks}"           "${KAFKA_JOB_TOPIC:-khmerlive.job.events}"; do
+          /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:19092 --create --if-not-exists --topic "$$topic" --partitions 3 --replication-factor 1
+        done
+
+  minio:
+    image: quay.io/minio/minio:RELEASE.2025-06-13T11-33-47Z
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-change-me-minio}
+    ports: ["9000:9000", "9001:9001"]
+    volumes: [minio-data:/data]
+    restart: unless-stopped
+
+  api:
+    build: {context: ./backend}
+    environment: *app-env
+    depends_on:
+      postgres: {condition: service_healthy}
+      kafka-init: {condition: service_completed_successfully}
+      minio: {condition: service_started}
+    ports: ["8000:8000"]
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  worker:
+    build: {context: ./backend}
+    command: ["python", "-m", "app.worker"]
+    environment: *app-env
+    depends_on:
+      postgres: {condition: service_healthy}
+      kafka-init: {condition: service_completed_successfully}
+      minio: {condition: service_started}
+    restart: unless-stopped
+
+  web:
+    build: {context: ./web}
+    depends_on:
+      api: {condition: service_healthy}
+    ports: ["8080:80"]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost/ >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  jupyterhub:
+    build: {context: ./training}
+    environment:
+      <<: *app-env
+      JUPYTERHUB_PASSWORD: ${JUPYTERHUB_PASSWORD:-change-me-jupyter}
+      JUPYTERHUB_ADMIN_PASSWORD: ${JUPYTERHUB_ADMIN_PASSWORD:-change-me-admin}
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      postgres: {condition: service_healthy}
+      kafka-init: {condition: service_completed_successfully}
+      minio: {condition: service_started}
+    ports: ["8001:8000"]
+    volumes:
+      - jupyterhub-data:/srv/jupyterhub
+      - ./training/notebooks:/workspace/notebooks
+      - ./training/workspace:/workspace/workspace
+    restart: unless-stopped
+
+  mlflow:
+    build: {context: ./training}
+    command: ["mlflow","server","--host","0.0.0.0","--port","5000","--backend-store-uri","sqlite:////mlflow/mlflow.db","--default-artifact-root","s3://${MINIO_BUCKET:-khmerlive}/mlflow"]
+    environment:
+      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-minioadmin}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-change-me-minio}
+      MLFLOW_S3_ENDPOINT_URL: http://minio:9000
+    depends_on:
+      minio: {condition: service_started}
+    ports: ["5000:5000"]
+    volumes: [mlflow-data:/mlflow]
+    restart: unless-stopped
+
+volumes:
+  postgres-data:
+  redis-data:
+  kafka-data:
+  minio-data:
+  jupyterhub-data:
+  mlflow-data:
