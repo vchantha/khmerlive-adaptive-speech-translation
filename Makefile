@@ -1,6 +1,9 @@
-.PHONY: up down logs ps build smoke clean
+.PHONY: tls up down logs ps build smoke clean
 
-up:
+tls:
+	bash scripts/generate_tls.sh
+
+up: tls
 	cp -n .env.example .env 2>/dev/null || true
 	docker compose up -d --build
 
@@ -13,7 +16,7 @@ logs:
 ps:
 	docker compose ps
 
-build:
+build: tls
 	docker compose build
 
 smoke:
