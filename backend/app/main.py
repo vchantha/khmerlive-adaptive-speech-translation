@@ -48,7 +48,8 @@ def get_job(job_id:str,db:Session=Depends(get_db)):
 @app.get("/api/v1/system/status")
 def system_status(db:Session=Depends(get_db)):
     queued=db.scalar(select(func.count()).select_from(IngestJob).where(IngestJob.state.in_(["queued","processing"]))) or 0
-    storage = "healthy" if minio_healthy() else "unavailable"\n    return {"jobs_queue":queued,"kafka":"running" if kafka_healthy() else "unavailable","silo":storage,"minio":storage,"processing":"healthy"}
+    storage = "healthy" if minio_healthy() else "unavailable"
+    return {"jobs_queue":queued,"kafka":"running" if kafka_healthy() else "unavailable","silo":storage,"minio":storage,"processing":"healthy"}
 
 @app.post("/api/v1/ingest/upload",status_code=202)
 def ingest_upload(file:UploadFile=File(...),db:Session=Depends(get_db)):

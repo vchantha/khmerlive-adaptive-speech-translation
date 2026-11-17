@@ -1,6 +1,6 @@
 import os
 
-from jupyterhub.auth import SharedPasswordAuthenticator
+from jupyterhub.authenticators.shared import SharedPasswordAuthenticator
 from jupyterhub.spawner import SimpleLocalProcessSpawner
 
 c = get_config()  # noqa: F821
@@ -16,7 +16,7 @@ c.SharedPasswordAuthenticator.user_password = os.environ.get(
     "JUPYTERHUB_PASSWORD", "change-me-jupyter"
 )
 c.SharedPasswordAuthenticator.admin_password = os.environ.get(
-    "JUPYTERHUB_ADMIN_PASSWORD", "change-me-admin"
+    "JUPYTERHUB_ADMIN_PASSWORD", "change-me-admin-password-min-32-chars"
 )
 c.Authenticator.admin_users = {"admin"}
 

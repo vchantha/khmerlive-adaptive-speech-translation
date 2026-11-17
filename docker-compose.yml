@@ -27,7 +27,7 @@ x-app-env: &app-env
   MAX_STREAM_SECONDS: ${MAX_STREAM_SECONDS:-3600}
   AUDIO_CHUNK_SECONDS: ${AUDIO_CHUNK_SECONDS:-30}
   STREAM_SEGMENT_SECONDS: ${STREAM_SEGMENT_SECONDS:-10}
-  CORS_ORIGINS: https://localhost:${HTTPS_PORT:-8443},https://127.0.0.1:${HTTPS_PORT:-8443}
+  CORS_ORIGINS: https://localhost:${HTTPS_PORT:-8443},https://127.0.0.1:${HTTPS_PORT:-8443},https://${PUBLIC_HOST:-localhost}:${HTTPS_PORT:-8443}
 
 services:
   postgres:
@@ -37,7 +37,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-khmerlive}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me-postgres}
     ports:
-      - "127.0.0.1:5432:5432"
+      - "5432:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
@@ -49,9 +49,11 @@ services:
 
   redis:
     image: redis:7.4-alpine
-    command: ["redis-server", "--appendonly", "yes"]
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:-change-me-redis}"]
+    environment:
+      REDISCLI_AUTH: ${REDIS_PASSWORD:-change-me-redis}
     ports:
-      - "127.0.0.1:6379:6379"
+      - "6379:6379"
     volumes:
       - redis-data:/data
     healthcheck:
@@ -71,7 +73,9 @@ services:
       KAFKA_PROCESS_ROLES: broker,controller
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,SSL_INTERNAL:SSL,SSL_HOST:SSL
       KAFKA_LISTENERS: CONTROLLER://:29093,SSL_HOST://:9093,SSL_INTERNAL://:19093
-      KAFKA_ADVERTISED_LISTENERS: SSL_HOST://localhost:9093,SSL_INTERNAL://kafka:19093
+      # SSL_HOST is what clients outside Docker connect to; it must be an
+      # address they can resolve/reach and that is in the Kafka certificate.
+      KAFKA_ADVERTISED_LISTENERS: SSL_HOST://${PUBLIC_HOST:-localhost}:9093,SSL_INTERNAL://kafka:19093
       KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:29093
       KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
       KAFKA_INTER_BROKER_LISTENER_NAME: SSL_INTERNAL
@@ -82,7 +86,7 @@ services:
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
       KAFKA_SHARE_COORDINATOR_STATE_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_SHARE_COORDINATOR_STATE_TOPIC_MIN_ISR: 1
-      KAFKA_LOG_DIRS: /tmp/kraft-combined-logs
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
 
       KAFKA_SSL_KEYSTORE_TYPE: PKCS12
       KAFKA_SSL_KEYSTORE_LOCATION: /etc/kafka/secrets/kafka.keystore.p12
@@ -94,10 +98,10 @@ services:
       KAFKA_SSL_CLIENT_AUTH: none
       KAFKA_SSL_ENABLED_PROTOCOLS: TLSv1.2,TLSv1.3
     volumes:
-      - kafka-data:/tmp/kraft-combined-logs
+      - kafka-data:/var/lib/kafka/data
       - ./infra/tls/generated/kafka:/etc/kafka/secrets:ro
     healthcheck:
-      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9093 --command-config /etc/kafka/secrets/client.properties --list >/dev/null 2>&1"]
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:19093 --command-config /etc/kafka/secrets/client.properties --list >/dev/null 2>&1"]
       interval: 10s
       timeout: 8s
       retries: 30
@@ -155,7 +159,7 @@ services:
       silo:
         condition: service_started
     ports:
-      - "127.0.0.1:8000:8443"
+      - "8000:8443"
     volumes:
       - ./infra/tls/generated:/etc/khmerlive/tls:ro
     healthcheck:
@@ -184,6 +188,8 @@ services:
   web:
     build:
       context: ./web
+    environment:
+      HTTPS_PORT: ${HTTPS_PORT:-8443}
     depends_on:
       api:
         condition: service_healthy
@@ -193,7 +199,7 @@ services:
     volumes:
       - ./infra/tls/generated/web:/etc/nginx/tls:ro
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- --no-check-certificate https://localhost/ >/dev/null || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- --no-check-certificate https://127.0.0.1/>/dev/null || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 30
@@ -205,9 +211,9 @@ services:
     environment:
       <<: *app-env
       JUPYTERHUB_PASSWORD: ${JUPYTERHUB_PASSWORD:-change-me-jupyter}
-      JUPYTERHUB_ADMIN_PASSWORD: ${JUPYTERHUB_ADMIN_PASSWORD:-change-me-admin}
+      JUPYTERHUB_ADMIN_PASSWORD: ${JUPYTERHUB_ADMIN_PASSWORD:-change-me-admin-password-min-32-chars}
       MLFLOW_TRACKING_URI: http://mlflow:5000
-      REDIS_URL: redis://redis:6379/0
+      REDIS_URL: redis://:${REDIS_PASSWORD:-change-me-redis}@redis:6379/0
       AWS_CA_BUNDLE: /etc/khmerlive/tls/ca.crt
     depends_on:
       postgres:
@@ -226,6 +232,34 @@ services:
       - ./infra/tls/generated/jupyterhub:/etc/jupyterhub/tls:ro
     restart: unless-stopped
 
+  kafka-ui:
+    image: kafbat/kafka-ui:v1.5.0
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment:
+      KAFKA_CLUSTERS_0_NAME: khmerlive
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:19093
+      KAFKA_CLUSTERS_0_PROPERTIES_SECURITY_PROTOCOL: SSL
+      KAFKA_CLUSTERS_0_SSL_TRUSTSTORELOCATION: /etc/kafka/secrets/kafka.truststore.p12
+      KAFKA_CLUSTERS_0_SSL_TRUSTSTOREPASSWORD: ${KAFKA_TLS_PASSWORD:-change-me-kafka-tls}
+      DYNAMIC_CONFIG_ENABLED: "false"
+
+      AUTH_TYPE: LOGIN_FORM
+      SPRING_SECURITY_USER_NAME: ${KAFKA_UI_USER:-admin}
+      SPRING_SECURITY_USER_PASSWORD: ${KAFKA_UI_PASSWORD:-change-me-kafka-ui}
+
+      SERVER_PORT: "8443"
+      SERVER_SSL_ENABLED: "true"
+      SERVER_SSL_CERTIFICATE: file:/etc/kafka-ui/tls/tls.crt
+      SERVER_SSL_CERTIFICATEPRIVATEKEY: file:/etc/kafka-ui/tls/tls.key
+    ports:
+      - "8082:8443"
+    volumes:
+      - ./infra/tls/generated/kafka:/etc/kafka/secrets:ro
+      - ./infra/tls/generated/kafka-ui:/etc/kafka-ui/tls:ro
+    restart: unless-stopped
+
   mlflow:
     build:
       context: ./training
@@ -241,7 +275,7 @@ services:
       - --default-artifact-root
       - s3://${MINIO_BUCKET:-khmerlive}/mlflow
       - --allowed-hosts
-      - localhost:*,mlflow:5000,127.0.0.1:*
+      - localhost:*,mlflow:5000,127.0.0.1:*,${PUBLIC_HOST:-localhost}:*
     environment:
       AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-minioadmin}
       AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-change-me-silo-long-password}
@@ -251,7 +285,7 @@ services:
       silo:
         condition: service_started
     ports:
-      - "127.0.0.1:5000:5000"
+      - "5000:5000"
     volumes:
       - mlflow-data:/mlflow
       - ./infra/tls/generated/ca.crt:/etc/khmerlive/tls/ca.crt:ro

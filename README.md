@@ -126,7 +126,21 @@ docker compose up -d --build
 make smoke
 ```
 
-Open the UI at `http://localhost:8080`, JupyterHub at `http://localhost:8001`, MLflow at `http://localhost:5000`, and MinIO Console at `http://localhost:9001`.
+Services (replace `<host>` with `localhost`, or with `PUBLIC_HOST` from `.env` when connecting from another machine):
+
+| Service | URL | Auth |
+|---|---|---|
+| Web UI | `https://<host>:8443` (HTTP `:8080` redirects) | — |
+| API | `https://<host>:8000` | — |
+| JupyterHub | `https://<host>:8001` | `JUPYTERHUB_PASSWORD` / `admin` + `JUPYTERHUB_ADMIN_PASSWORD` |
+| Kafka UI | `https://<host>:8082` | `KAFKA_UI_USER` / `KAFKA_UI_PASSWORD` |
+| SILO console / S3 | `https://<host>:9001` / `https://<host>:9000` | `MINIO_ROOT_USER` / `MINIO_ROOT_PASSWORD` |
+| MLflow | `http://<host>:5000` | none |
+| Kafka (TLS) | `<host>:9093` | TLS only, trust `ca.crt` |
+| PostgreSQL | `<host>:5432` | `POSTGRES_USER` / `POSTGRES_PASSWORD` |
+| Redis | `<host>:6379` | `REDIS_PASSWORD` |
+
+**Remote access:** set `PUBLIC_HOST` in `.env` to this machine's LAN IP or DNS name, run `make tls` (re-issues service certificates for that address and keeps the existing CA), then `docker compose up -d --force-recreate`. Remote clients must trust `infra/tls/generated/ca.crt`, and the host firewall must allow inbound traffic on the ports above.
 
 See [docs/RUNBOOK.md](docs/RUNBOOK.md) for the full operating and security notes.
 
