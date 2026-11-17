@@ -4,7 +4,7 @@
 <rect x="24" y="28" width="44" height="44" rx="13" fill="#4167ff"/><path d="M40 39L57 50L40 61Z" fill="white"/><text x="78" y="57" fill="white" font-weight="bold" font-size="20">KhmerLive</text>
 <rect x="12" y="118" width="196" height="48" rx="9" fill="#3451c8"/><text x="30" y="148" font-size="17" fill="white">Video Ingestion</text>
 <text x="30" y="210" font-size="16" fill="#c5cbee">Ingest Jobs</text><text x="30" y="252" font-size="16" fill="#c5cbee">Pipeline &amp; Systems</text><text x="30" y="294" font-size="16" fill="#c5cbee">Monitoring</text><text x="30" y="336" font-size="16" fill="#c5cbee">Settings</text>
-<text x="252" y="54" font-size="30" class="t">KhmerLive Video Ingestion</text><text x="252" y="82" class="small">Upload, capture, and route video to Kafka and MinIO</text>
+<text x="252" y="54" font-size="30" class="t">KhmerLive Video Ingestion</text><text x="252" y="82" class="small">Upload, capture, and route video to Kafka and SILO</text>
 <rect x="242" y="110" width="730" height="540" rx="16" fill="white" stroke="#dbe2f3"/><text x="265" y="145" font-size="23" class="t">Source Ingestion</text><text x="265" y="169" class="small">Choose a source to start video processing</text>
 <rect x="263" y="189" width="216" height="52" rx="10" fill="#ebf1ff" stroke="#456bff"/><text x="318" y="221" class="label" fill="#2354e9">Upload File</text>
 <rect x="487" y="189" width="220" height="52" rx="10" fill="#f8faff" stroke="#d9e0ef"/><text x="528" y="221" class="label">URL (YouTube)</text>
@@ -21,14 +21,14 @@
 <path d="M1205 243h21" stroke="#40567a" stroke-width="2"/><path d="m1220 237 7 6-7 6" stroke="#40567a" fill="none"/>
 <rect x="1227" y="201" width="75" height="85" rx="12" fill="#eeeaff" stroke="#9278ef"/><text x="1239" y="246" font-size="18" class="t">Kafka</text>
 <path d="M1302 243h19" stroke="#40567a" stroke-width="2"/><path d="m1315 237 7 6-7 6" stroke="#40567a" fill="none"/>
-<rect x="1323" y="201" width="76" height="85" rx="12" fill="#ffedf6" stroke="#dfa1c7"/><text x="1336" y="246" font-size="18" class="t">MinIO</text><text x="1025" y="322" class="small">Kafka: events and chunk references</text><text x="1025" y="349" class="small">MinIO: video and audio objects</text>
+<rect x="1323" y="201" width="76" height="85" rx="12" fill="#ffedf6" stroke="#dfa1c7"/><text x="1336" y="246" font-size="18" class="t">SILO</text><text x="1025" y="322" class="small">Kafka: events and chunk references</text><text x="1025" y="349" class="small">SILO: video and audio objects</text>
 <rect x="991" y="395" width="428" height="255" rx="16" fill="white" stroke="#dbe2f3"/><text x="1013" y="430" font-size="22" class="t">System Status</text><text x="1013" y="452" class="small">Example status cards (design preview)</text>
 <rect x="1013" y="476" width="188" height="68" rx="10" fill="#f7faff" stroke="#e0e6f2"/><text x="1030" y="500" class="small">Job Queue</text><text x="1030" y="527" class="t" font-size="20">12 Queued</text>
 <rect x="1210" y="476" width="188" height="68" rx="10" fill="#f7faff" stroke="#e0e6f2"/><text x="1227" y="500" class="small">Kafka Producer</text><text x="1227" y="527" font-size="18" fill="#238d46">Running</text>
-<rect x="1013" y="554" width="188" height="68" rx="10" fill="#f7faff" stroke="#e0e6f2"/><text x="1030" y="578" class="small">MinIO Upload</text><text x="1030" y="604" font-size="18" fill="#238d46">Healthy</text>
+<rect x="1013" y="554" width="188" height="68" rx="10" fill="#f7faff" stroke="#e0e6f2"/><text x="1030" y="578" class="small">SILO Upload</text><text x="1030" y="604" font-size="18" fill="#238d46">Healthy</text>
 <rect x="1210" y="554" width="188" height="68" rx="10" fill="#f7faff" stroke="#e0e6f2"/><text x="1227" y="578" class="small">Pipeline</text><text x="1227" y="604" font-size="18" fill="#238d46">Healthy</text>
 <rect x="242" y="670" width="1177" height="205" rx="16" fill="white" stroke="#dbe2f3"/><text x="266" y="707" font-size="23" class="t">Recent Ingest Jobs</text>
-<rect x="266" y="728" width="1128" height="40" fill="#f1f4fb"/><text x="287" y="754" class="small">Job ID</text><text x="444" y="754" class="small">Source</text><text x="778" y="754" class="small">Type</text><text x="965" y="754" class="small">Kafka Status</text><text x="1150" y="754" class="small">MinIO Status</text>
+<rect x="266" y="728" width="1128" height="40" fill="#f1f4fb"/><text x="287" y="754" class="small">Job ID</text><text x="444" y="754" class="small">Source</text><text x="778" y="754" class="small">Type</text><text x="965" y="754" class="small">Kafka Status</text><text x="1150" y="754" class="small">SILO Status</text>
 <text x="287" y="797" font-size="14">JOB-001283</text><text x="444" y="797" font-size="14">angkor_tour.mp4</text><text x="778" y="797" font-size="14">File upload</text><text x="965" y="797" font-size="14">Queued</text><text x="1150" y="797" font-size="14">Pending</text><line x1="270" y1="812" x2="1390" y2="812" stroke="#e6eaf4"/>
 <text x="287" y="844" font-size="14">JOB-001282</text><text x="444" y="844" font-size="14">Live news stream</text><text x="778" y="844" font-size="14">Live Stream</text><text x="965" y="844" font-size="14" fill="#26964e">Streaming</text><text x="1150" y="844" font-size="14" fill="#26964e">Uploaded</text>
 </svg>
