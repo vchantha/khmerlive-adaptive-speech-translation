@@ -129,7 +129,7 @@ services:
       - "9001:9001"
     volumes:
       - silo-data:/data
-      - ./infra/tls/generated/silo:/certs:ro
+      - ./infra/tls/generated/silo:/certs
     restart: unless-stopped
 
   api:
@@ -207,7 +207,7 @@ services:
     environment:
       <<: *app-env
       JUPYTERHUB_PASSWORD: ${JUPYTERHUB_PASSWORD:-change-me-jupyter}
-      JUPYTERHUB_ADMIN_PASSWORD: ${JUPYTERHUB_ADMIN_PASSWORD:-change-me-admin}
+      JUPYTERHUB_ADMIN_PASSWORD: ${JUPYTERHUB_ADMIN_PASSWORD:-change-me-jupyter-admin-password-32chars}
       MLFLOW_TRACKING_URI: http://mlflow:5000
       REDIS_URL: redis://redis:6379/0
       AWS_CA_BUNDLE: /etc/khmerlive/tls/ca.crt
