@@ -1,41 +1,69 @@
-# End-to-end Docker runbook
+# End-to-end Docker runbook — SILO + TLS
 
-## Services
+## Current secure endpoints
 
-- Dashboard: `http://localhost:8080`
-- FastAPI: `http://localhost:8000`
-- JupyterHub: `http://localhost:8001`
-- MLflow: `http://localhost:5000`
-- MinIO S3/console: `http://localhost:9000` / `http://localhost:9001`
-- Kafka host listener: `localhost:9092`
-- PostgreSQL: `localhost:5432`
-- Redis: `localhost:6379`
+- Dashboard: `https://localhost:8443` (default; configurable with `HTTPS_PORT`)
+- HTTP redirect: `http://localhost:8080`
+- FastAPI direct: `https://localhost:8000`
+- JupyterHub: `https://localhost:8001`
+- SILO S3 API: `https://localhost:9000`
+- SILO Console: `https://localhost:9001`
+- Kafka SSL listener: `localhost:9093`
+- PostgreSQL: `127.0.0.1:5432` (host loopback only)
+- Redis: `127.0.0.1:6379` (host loopback only)
+- MLflow: `http://127.0.0.1:5000` (loopback only; internal research service)
 
-Pipeline:
+The browser-facing UI/API/JupyterHub, Kafka clients, and SILO object storage use TLS. Kafka's KRaft controller listener remains private PLAINTEXT inside the Docker network in this single-node development topology.
+
+## Storage compatibility
+
+SILO is the S3-compatible maintained fork used by this project. The stack pins:
+
+```text
+docker.io/pgsty/silo:RELEASE.2026-11-09T00-00-00Z
+```
+
+SILO intentionally retains MinIO-compatible credential environment names. Existing values can remain:
+
+```dotenv
+MINIO_ROOT_USER=...
+MINIO_ROOT_PASSWORD=...
+MINIO_BUCKET=khmerlive
+```
+
+Application-facing settings use `SILO_ENDPOINT`, `SILO_SECURE`, and `SILO_CA_FILE`. The API also returns legacy `minio` / `minio_status` aliases so existing consumers and stored PostgreSQL records do not break.
+
+## Pipeline
 
 ```text
 Upload / YouTube / RTMP-HLS
         |
-      FastAPI
+   HTTPS FastAPI
         |
 PostgreSQL job state
         |
-Kafka: khmerlive.ingest.requests
+Kafka SSL: khmerlive.ingest.requests
         |
  ingestion worker + FFmpeg
         |
- MinIO raw/processed/stream objects
+ SILO HTTPS raw/processed/stream objects
         |
-Kafka: khmerlive.media.chunks + khmerlive.job.events
+Kafka SSL: khmerlive.media.chunks + khmerlive.job.events
         |
 JupyterHub / training / downstream ASR-MT
 ```
 
-## Start
+## First start
 
 ```bash
-cp .env.example .env
-# change every change-me secret
+git pull origin main
+cp -n .env.example .env
+
+# Edit .env and replace every change-me value.
+# JupyterHub 6.x requires the admin password to be >= 32 characters.
+
+make tls
+
 docker compose config
 docker compose pull
 docker compose build
@@ -43,42 +71,93 @@ docker compose up -d
 docker compose ps
 ```
 
-Run the smoke test:
+`make tls` creates a local KhmerLive CA and SAN certificates under `infra/tls/generated/`. Private keys are gitignored.
+
+For browser access without warnings, import:
+
+```text
+infra/tls/generated/ca.crt
+```
+
+into your local workstation/browser trust store. For production, replace these generated certificates with certificates from your internal PKI or a public CA.
+
+## Verify
 
 ```bash
 make smoke
 ```
 
-The test generates a short WAV in the API container, uploads it, waits for the worker and lists jobs. Inspect MinIO for `raw/<job-id>/...` and `processed/<job-id>/audio/chunk-*.wav`.
+The smoke test:
 
-## Kafka topics
+1. verifies the HTTPS gateway using the project CA;
+2. generates a short WAV inside the API container;
+3. sends it through the TLS API;
+4. publishes the ingest request to Kafka over SSL;
+5. lets the worker write objects to SILO over HTTPS;
+6. reads the recent PostgreSQL-backed job status.
+
+Inspect SILO for:
+
+```text
+raw/<job-id>/...
+processed/<job-id>/audio/chunk-*.wav
+streams/<job-id>/video/...
+streams/<job-id>/audio/...
+```
+
+## Kafka TLS topics
 
 - `khmerlive.ingest.requests`
 - `khmerlive.media.chunks`
 - `khmerlive.job.events`
 
-## Live stream
+Internal clients use:
 
-RTMP/RTMPS and HTTP(S) HLS are accepted. The worker uses FFmpeg to create finalized MPEG-TS segments and mono 16-kHz WAV audio objects. Each object is uploaded to MinIO and announced with a Kafka event. `MAX_STREAM_SECONDS` limits a capture session.
-
-This MVP uses one Kafka consumer process per worker container; one long-lived stream occupies that process. Scale worker replicas or introduce a dedicated stream supervisor before high-concurrency use.
-
-## JupyterHub training
-
-JupyterHub uses SharedPasswordAuthenticator and SimpleLocalProcessSpawner for a trusted local research environment. It is not suitable as-is for an internet-facing multi-tenant deployment.
-
-The image includes PyTorch/Torchaudio, Transformers, Datasets, Accelerate, PEFT, Evaluate, Faster-Whisper, SentencePiece, JiWER, SacreBLEU, Librosa, MLflow, Optuna, Kafka, MinIO/S3, PostgreSQL, Pandas/Polars and plotting tools.
-
-Optional heavyweight build args:
-
-```bash
-docker compose build --build-arg INSTALL_NEMO=1 --build-arg INSTALL_BITSANDBYTES=1 jupyterhub
+```dotenv
+KAFKA_BOOTSTRAP_SERVERS=kafka:19093
+KAFKA_SECURITY_PROTOCOL=SSL
+KAFKA_SSL_CA_LOCATION=/etc/khmerlive/tls/ca.crt
 ```
 
-For real GPU training, use a CUDA/NVIDIA training image matched to your host driver and PyTorch CUDA matrix; the default portable image must not be assumed to provide GPU acceleration.
+The host SSL listener is `localhost:9093`.
 
-## Production gaps
+## JupyterHub
 
-Before production: TLS/OIDC, per-user notebook isolation, Kafka TLS/SASL, least-privilege MinIO/PostgreSQL credentials, SSRF-safe stream allowlists, upload scanning and hard size/type limits, Alembic migrations, HA Kafka/object storage, backup/restore, observability and tested model promotion/rollback.
+Current project requirement: JupyterHub 6.2.x.
 
-The Compose file pins historical MinIO community image `RELEASE.2025-06-13T11-33-47Z` for reproducible local development. Reassess the supported MinIO/AIStor or source-build path before production.
+Users:
+
+- `researcher` — shared research password
+- `admin` — admin password (minimum 32 characters)
+
+The included notebook `training/notebooks/00_environment_check.ipynb` verifies PostgreSQL, SILO HTTPS and Kafka SSL connectivity.
+
+## Environment migration from the previous stack
+
+If an existing `.env` already contains:
+
+```dotenv
+MINIO_ROOT_USER=...
+MINIO_ROOT_PASSWORD=...
+MINIO_BUCKET=...
+```
+
+keep those variables. Add:
+
+```dotenv
+SILO_ENDPOINT=silo:9000
+SILO_SECURE=true
+SILO_CA_FILE=/etc/khmerlive/tls/ca.crt
+
+KAFKA_BOOTSTRAP_SERVERS=kafka:19093
+KAFKA_SECURITY_PROTOCOL=SSL
+KAFKA_SSL_CA_LOCATION=/etc/khmerlive/tls/ca.crt
+KAFKA_TLS_PASSWORD=<strong-password>
+HTTPS_PORT=8443
+```
+
+Also update `JUPYTERHUB_ADMIN_PASSWORD` to at least 32 characters.
+
+## Development vs production
+
+This Compose deployment is a secure development/research baseline, not HA production infrastructure. Before production add OIDC/SSO, dedicated user isolation for JupyterHub, Kafka authentication (mTLS or SASL_SSL), PostgreSQL TLS, Redis TLS or network isolation, HA Kafka/SILO, secret management, backups, observability, rate limits, SSRF-safe stream allowlists, malware/upload validation, and tested recovery/model rollback.

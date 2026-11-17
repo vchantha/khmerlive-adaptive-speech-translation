@@ -11,14 +11,14 @@ from .db import get_db, init_db
 from .events import healthy as kafka_healthy, publish
 from .models import IngestJob
 from .schemas import StreamIngestRequest, UrlIngestRequest
-from .storage import ensure_bucket, healthy as minio_healthy, put_stream
+from .storage import ensure_bucket, healthy as silo_healthy, put_stream
 
 settings = get_settings()
 app = FastAPI(title=settings.app_name, version="0.1.0")
 app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origin_list, allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
 def job_dict(job: IngestJob) -> dict:
-    return {"id":job.id,"source_type":job.source_type,"source":job.source,"source_name":job.source_name,"state":job.state,"kafka_status":job.kafka_status,"minio_status":job.minio_status,"object_name":job.object_name,"metadata":job.media_metadata or {},"chunk_count":job.chunk_count,"error":job.error,"created_at":job.created_at,"updated_at":job.updated_at}
+    return {"id":job.id,"source_type":job.source_type,"source":job.source,"source_name":job.source_name,"state":job.state,"kafka_status":job.kafka_status,"silo_status":job.minio_status,"minio_status":job.minio_status,"object_name":job.object_name,"metadata":job.media_metadata or {},"chunk_count":job.chunk_count,"error":job.error,"created_at":job.created_at,"updated_at":job.updated_at}
 
 @app.on_event("startup")
 def startup() -> None:
@@ -31,7 +31,7 @@ def live():
 
 @app.get("/health/ready")
 def ready():
-    k,m=kafka_healthy(),minio_healthy()
+    k,m=kafka_healthy(),silo_healthy()
     return {"status":"ok" if k and m else "degraded","kafka":k,"silo":m,"minio":m}
 
 @app.get("/api/v1/jobs")
@@ -48,7 +48,11 @@ def get_job(job_id:str,db:Session=Depends(get_db)):
 @app.get("/api/v1/system/status")
 def system_status(db:Session=Depends(get_db)):
     queued=db.scalar(select(func.count()).select_from(IngestJob).where(IngestJob.state.in_(["queued","processing"]))) or 0
+<<<<<<< HEAD
     storage = "healthy" if minio_healthy() else "unavailable"
+=======
+    storage = "healthy" if silo_healthy() else "unavailable"
+>>>>>>> 8629d56567555d3caa84d091a4851d5880b03128
     return {"jobs_queue":queued,"kafka":"running" if kafka_healthy() else "unavailable","silo":storage,"minio":storage,"processing":"healthy"}
 
 @app.post("/api/v1/ingest/upload",status_code=202)

@@ -11,7 +11,7 @@
 | `worker` | Celery audio/ASR/MT jobs | stateless; job state in PostgreSQL |
 | `postgres` | jobs, audit, revisions, consent and model metadata | persistent named volume |
 | `redis` | broker/cache only | ephemeral/rebuildable |
-| `minio` | audio, datasets, model artifacts | persistent named volume |
+| `silo` | audio, datasets, model artifacts | persistent named volume |
 | `mlflow` (optional dev profile) | experiment tracking | backed by DB and object store |
 
 ## Required configuration
@@ -22,7 +22,7 @@
 
 ## Startup order
 1. Provision directories, volumes and secrets.
-2. Start PostgreSQL, Redis, MinIO and validate health.
+2. Start PostgreSQL, Redis, SILO and validate health.
 3. Run one-off migration job and required object-bucket provisioning.
 4. Start API, worker and web with readiness checks.
 5. Run integration test: audio upload → persistent job → ASR → MT → result.
@@ -36,7 +36,7 @@
 - Health probes indicate missing model files / broken DB connections correctly.
 - No external network calls in proven air-gapped mode; models and Python dependencies prepackaged.
 - Set CPU-only baseline first, then optional NVIDIA GPU profile.
-- Limit upload sizes, apply API auth and network isolation; do not expose PostgreSQL, Redis or MinIO admin publicly.
+- Limit upload sizes, apply API auth and network isolation; do not expose PostgreSQL, Redis or SILO admin publicly.
 - Add a repeatable `make test` and CI smoke checks.
 
 ## Explicit non-goals at initialization
