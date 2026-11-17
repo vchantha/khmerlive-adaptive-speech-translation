@@ -32,7 +32,7 @@ def live():
 @app.get("/health/ready")
 def ready():
     k,m=kafka_healthy(),minio_healthy()
-    return {"status":"ok" if k and m else "degraded","kafka":k,"minio":m}
+    return {"status":"ok" if k and m else "degraded","kafka":k,"silo":m,"minio":m}
 
 @app.get("/api/v1/jobs")
 def list_jobs(limit:int=50,db:Session=Depends(get_db)):
@@ -48,7 +48,7 @@ def get_job(job_id:str,db:Session=Depends(get_db)):
 @app.get("/api/v1/system/status")
 def system_status(db:Session=Depends(get_db)):
     queued=db.scalar(select(func.count()).select_from(IngestJob).where(IngestJob.state.in_(["queued","processing"]))) or 0
-    return {"jobs_queue":queued,"kafka":"running" if kafka_healthy() else "unavailable","minio":"healthy" if minio_healthy() else "unavailable","processing":"healthy"}
+    storage = "healthy" if minio_healthy() else "unavailable"\n    return {"jobs_queue":queued,"kafka":"running" if kafka_healthy() else "unavailable","silo":storage,"minio":storage,"processing":"healthy"}
 
 @app.post("/api/v1/ingest/upload",status_code=202)
 def ingest_upload(file:UploadFile=File(...),db:Session=Depends(get_db)):
