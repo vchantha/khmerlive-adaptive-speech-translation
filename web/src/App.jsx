@@ -12,7 +12,7 @@ const api={
 const badgeClass=(value="")=>{const v=value.toLowerCase();if(["success","healthy","running","uploaded"].includes(v))return"badge good";if(["failed","unavailable"].includes(v))return"badge bad";if(["streaming","processing"].includes(v))return"badge live";return"badge warn";};
 
 function App(){
- const[tab,setTab]=useState("upload"),[jobs,setJobs]=useState([]),[system,setSystem]=useState({jobs_queue:0,kafka:"checking",minio:"checking",processing:"checking"});
+ const[tab,setTab]=useState("upload"),[jobs,setJobs]=useState([]),[system,setSystem]=useState({jobs_queue:0,kafka:"checking",silo:"checking",processing:"checking"});
  const[selected,setSelected]=useState(null),[preview,setPreview]=useState(""),[youtubeUrl,setYoutubeUrl]=useState(""),[streamUrl,setStreamUrl]=useState(""),[streamName,setStreamName]=useState("KhmerLive Live"),[busy,setBusy]=useState(false),[message,setMessage]=useState("");
  const fileRef=useRef();
  const refresh=async()=>{try{const[j,s]=await Promise.all([api.jobs(),api.status()]);setJobs(j);setSystem(s);}catch(e){setMessage(e.message);}};
